@@ -167,7 +167,7 @@ def main():
         # print Loading... while request not finished as first one takes longest
         def loading():
             # idea from a thread on stackoverflow, slightly adapted: https://stackoverflow.com/a/22029635
-            for dot in itertools.cycle(['.', '..', '...', '....']):
+            for dot in itertools.cycle(['', '.', '..', '...']):
                 if done:
                     break
                 sys.stdout.write('\rLoading' + dot)
@@ -190,7 +190,8 @@ def main():
             offset = 0
 
             i_3 = input_checker(input(f'\nSelection of the {genre_str}:\n'
-                                      f'[1] Enter Entity ID [2] Enter Label (Name) [3] Show more {genre_str}s\n'
+                                      f'[1] Enter Entity ID [2] Enter Label/Name of any {genre_str}  '
+                                      f'[3] Show more {genre_str}s\n'
                                       f'>> '), 1, 3)
 
             while i_3 == 3:
@@ -201,7 +202,8 @@ def main():
                 print_request(results, offset, offset + 10)
 
                 i_3 = input_checker(input(f'\nSelection of the {genre_str}:\n'
-                                          f'[1] Enter Entity ID [2] Enter Label (Name) [3] Show more {genre_str}s\n'
+                                          f'[1] Enter Entity ID [2] Enter Label/Name of any {genre_str} '
+                                          f'[3] Show more {genre_str}s\n'
                                           f'>> '), 1, 3)
 
             if i_3 == 1:
@@ -224,7 +226,7 @@ def main():
                                           f'[1] Show average age of all cast members at the first publication date\n'
                                           f'[2] Show sex/gender count among all cast members \n'
                                           f'[3] Show difference between box office takings and cost of film\n'
-                                          f'[4] List all films by the same director(s)\n'
+                                          f'[4] List all other films by the same director(s)\n'
                                           f'>> '), 1, 4)
 
                 if i_5 == 1:
@@ -320,11 +322,13 @@ def main():
                 if i_5 == 4:
                     # QUERY 7: list director(s) of this film with all their other films
                     query = """
-                    SELECT ?directorLabel (GROUP_CONCAT(?other_filmLabel; SEPARATOR = ", ") AS ?film_list) (COUNT(?other_filmLabel) AS ?count) 
+                    # tilde as a separator to avoid splitting at comma in film title within python
+                    SELECT ?directorLabel (GROUP_CONCAT(?other_filmLabel; SEPARATOR = " ~ ") AS ?film_list) (COUNT(?other_filmLabel) AS ?count) 
                     WHERE {
                       VALUES ?film {wd:%s}
                       ?film wdt:P57 ?director.
                       ?other_film wdt:P57 ?director;
+                                  wdt:P31/wdt:P279* wd:Q11424;
                                   rdfs:label ?other_filmLabel.
                       FILTER(?other_film != ?film)
                       FILTER((LANG(?other_filmLabel)) = "en")
@@ -344,7 +348,8 @@ def main():
                             director = item['directorLabel']['value']
                             count = item['count']['value']
                             films = item['film_list']['value']
-                            split_films = [film for film in films.split(', ')]
+                            # split for cleaner formatting output
+                            split_films = [film for film in films.split(' ~ ')]
                             start = 0
                             stop = 4
                             combined_list = []
@@ -370,8 +375,9 @@ def main():
                                           f'[1] show top 10 who won most awards\n'
                                           f'[2] show filming locations of all on a map '
                                           f'(this option will open your browser)\n'
-                                          f'[3] show cast members who were born in switzerland\n\twith the {genre_str}s'
-                                          f' they were part of on a map (this option will open your browser)\n'
+                                          f'[3] show birthplace of swiss cast members on a map'
+                                          f'\n\twith the {genre_str}s'
+                                          f' they were part of (this option will open your browser)\n'
                                           f'[4] show top 10 with biggest difference between\n\tbox office takings '
                                           f'and cost (in USD)\n'
                                           f'>> '), 1, 4)
@@ -413,7 +419,7 @@ def main():
                     # query directly included in url
 
                     # QUERY 10: cast members who were born in switzerland and the films they have worked on as list
-                    url_map = f"https://query.wikidata.org/embed.html#%23defaultView%3AMap%7B%22hide%22%3A%20%22%3Fcoordinates%22%7D%0ASELECT%20%3Fcast_member%20%3Fcast_memberLabel%20%3Fcoordinates%20%3Ffilm_listLabel%20WHERE%20%7B%0A%20%20%7B%0A%20%20%20%20SELECT%20%3Fcast_member%20%3Fcoordinates%20(GROUP_CONCAT(DISTINCT%20%3FfilmLabel%3B%20SEPARATOR%20%3D%20%22%2C%20%22)%20AS%20%3Ffilm_list)%20WHERE%20%7B%0A%20%20%0A%20%20%20%20%3Ffilm%20wdt%3AP31%2Fwdt%3AP279*%20wd%3AQ11424%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP136%20wd%3A{film_genre_id}%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP161%20%3Fcast_member%3B%0A%20%20%20%20%20%20%20%20%20%20rdfs%3Alabel%20%3FfilmLabel.%0A%20%20%20%20FILTER((LANG(%3FfilmLabel))%20%3D%20%22en%22)%0A%20%20%20%20%3Fcast_member%20wdt%3AP19%20%5B%0A%20%20%20%20%20%20%20%20%20%20%20wdt%3AP17%20wd%3AQ39%3B%0A%20%20%20%20%20%20%20%20%20%20%20wdt%3AP625%20%3Fcoordinates%0A%20%20%20%20%20%20%20%20%20%20%20%5D.%0A%20%20%20%20%7D%0A%20%20GROUP%20BY%20%3Fcast_member%20%3Fcoordinates%0A%20%20%7D%0A%20SERVICE%20wikibase%3Alabel%20%7B%20bd%3AserviceParam%20wikibase%3Alanguage%20%22%5BAUTO_LANGUAGE%5D%2Cen%22.%20%7D%0A%7D%0A%0A%0A"
+                    url_map = f"https://query.wikidata.org/embed.html#%23defaultView%3AMap%7B%22hide%22%3A%20%22%3Fcoordinates%22%7D%0ASELECT%20%3Fcast_member%20%3Fcast_memberLabel%20%3Fcoordinates%20%3Ffilm_listLabel%20WHERE%20%7B%0A%20%20%7B%0A%20%20%20%20SELECT%20%3Fcast_member%20%3Fcoordinates%20(GROUP_CONCAT(DISTINCT%20%3FfilmLabel%3B%20SEPARATOR%20%3D%20%22%2C%20%22)%20AS%20%3Ffilm_list)%20WHERE%20%7B%0A%20%20%0A%20%20%20%20%3Ffilm%20wdt%3AP31%2Fwdt%3AP279*%20wd%3AQ11424%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP136%20wd%3A{film_genre_id}%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP161%20%3Fcast_member%3B%0A%20%20%20%20%20%20%20%20%20%20rdfs%3Alabel%20%3FfilmLabel.%0A%20%20%20%20FILTER((LANG(%3FfilmLabel))%20%3D%20%22en%22)%0A%20%20%20%20%3Fcast_member%20wdt%3AP27%20wd%3AQ39%3B%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20wdt%3AP19%20%5Bwdt%3AP625%20%3Fcoordinates%5D.%0A%20%20%20%20%7D%0A%20%20GROUP%20BY%20%3Fcast_member%20%3Fcoordinates%0A%20%20%7D%0A%20SERVICE%20wikibase%3Alabel%20%7B%20bd%3AserviceParam%20wikibase%3Alanguage%20%22%5BAUTO_LANGUAGE%5D%2Cen%22.%20%7D%0A%7D%0A%0A%0A"
                     webbrowser.open(url_map)
 
                 if i_3 == 4:
