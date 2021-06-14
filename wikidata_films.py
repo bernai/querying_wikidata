@@ -323,7 +323,7 @@ def main():
                     # QUERY 7: list director(s) of this film with all their other films
                     query = """
                     # tilde as a separator to avoid splitting at comma in film title within python
-                    SELECT ?directorLabel (GROUP_CONCAT(?other_filmLabel; SEPARATOR = " ~ ") AS ?film_list) (COUNT(?other_filmLabel) AS ?count) 
+                    SELECT ?directorLabel (GROUP_CONCAT(DISTINCT ?other_filmLabel; SEPARATOR = " ~ ") AS ?film_list) (COUNT(DISTINCT ?other_filmLabel) AS ?count) 
                     WHERE {
                       VALUES ?film {wd:%s}
                       ?film wdt:P57 ?director.
