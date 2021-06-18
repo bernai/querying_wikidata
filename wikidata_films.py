@@ -45,18 +45,18 @@ def find_by_id(genre_str, genre_id):
     i_4 = 2
     item_label = ''
 
-    # INPUT 3
     i_3 = input('\nEnter an Entity ID:\n'
                 '>> ').rstrip()
 
     try:
+        # QUERY 2: find film by ID
         query = """
         SELECT ?film ?filmLabel 
         WHERE 
         {
-          VALUES ?film {wd:%s}
-          ?film wdt:P31/wdt:P279* wd:Q11424;
-                wdt:P136 wd:%s.
+          VALUES ?film {wd:%s} # set film variable using ID provided by user
+          ?film wdt:P31/wdt:P279* wd:Q11424; # make sure this ID belongs to film
+                wdt:P136 wd:%s. # make sure it belongs to previously selected genre
           SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
         }
         """ % (i_3, genre_id)
@@ -66,7 +66,6 @@ def find_by_id(genre_str, genre_id):
         entity_id = results['results']['bindings'][0]['film']['value'][31:]
         item_label = results['results']['bindings'][0]['filmLabel']['value']
 
-        # INPUT 4
         i_4 = input_checker(input(f'\nDid you mean "{item_label}" with Entity ID "{entity_id}"?:\n'
                                   f'[1] yes [2] no\n'
                                   f'>> '), 1, 2)
@@ -85,19 +84,19 @@ def find_by_string(genre_str, genre_id):
     entity_id = ''
     item_label = ''
 
-    # INPUT 3
     i_3 = input('\nEnter the Label (Name) of the film:\n'
                 '>> ').lower()
 
+    # QUERY 3: find labels that contain user given input, return first
     query = """
     SELECT ?film ?filmLabel
     WHERE{
     ?film wdt:P31 wd:Q11424;
-            wdt:P136 wd:%s;
-            rdfs:label ?filmLabel.
-    FILTER(LANG(?filmLabel) ="en").
-    FILTER (CONTAINS(LCASE(STR(?filmLabel)), "%s"))
-    } LIMIT 1
+            wdt:P136 wd:%s; # make sure film belongs to specified genre
+            rdfs:label ?filmLabel. # get labels
+    FILTER(LANG(?filmLabel) ="en"). # only get english labels
+    FILTER (CONTAINS(LCASE(STR(?filmLabel)), "%s"))  # check if user input is somewhere in label
+    } LIMIT 1 # return only one out of all that contain this string
     """ % (genre_id, i_3)
 
     results = get_results_request(query)
@@ -106,7 +105,6 @@ def find_by_string(genre_str, genre_id):
         entity_id = results['results']['bindings'][0]['film']['value'][31:]
         item_label = results['results']['bindings'][0]['filmLabel']['value']
 
-        # INPUT 4
         i_4 = input_checker(input(f'\nDid you mean "{item_label}" with Entity ID "{entity_id}"?:\n'
                                   f'[1] yes [2] no\n'
                                   f'>> '), 1, 2)
@@ -154,8 +152,8 @@ def main():
         query = """
         SELECT ?film ?filmLabel
         WHERE {
-        ?film wdt:P31/wdt:P279* wd:Q11424;
-              wdt:P136 wd:%s.
+        ?film wdt:P31/wdt:P279* wd:Q11424; # variable is instance/subclass of film
+              wdt:P136 wd:%s. # variable film has certain genre
         SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
         }
         """ % film_genre_id
@@ -232,14 +230,15 @@ def main():
                 if i_5 == 1:
                     # QUERY 4: average age of all cast members at the first publication date
                     query = """
-                    SELECT (AVG(?age_first_publ) AS ?avg) {
-                    SELECT ?cast_member ?cast_memberLabel (MAX(?age) AS ?age_first_publ)
+                    SELECT (AVG(?age_first_publ) AS ?avg) { # take ages at first publication and average them
+                    # return these variables, take maximum age (as sometimes multiple publication dates are available)
+                    SELECT ?cast_member ?cast_memberLabel (MAX(?age) AS ?age_first_publ) 
                     WHERE 
-                    {
-                      VALUES ?film {wd:%s}
-                      ?film wdt:P161 ?cast_member;
-                            wdt:P577 ?pub_date.
-                      ?cast_member wdt:P569 ?birth_date.
+                    { # set user film ID input as film variable
+                      VALUES ?film {wd:%s} # no check for genre needed as it was done already in query 2/3
+                      ?film wdt:P161 ?cast_member; # get cast members
+                            wdt:P577 ?pub_date. # get publication date of film
+                      ?cast_member wdt:P569 ?birth_date. # get birth date of cast member
                       BIND(YEAR(?pub_date) - YEAR(?birth_date) as ?age)
                       SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
         
@@ -262,18 +261,20 @@ def main():
                     # QUERY 5: show sex/gender count of cast members
                     # also handles cases where more than one sex/gender property given by listing everything
                     query = """
-                    SELECT ?sex_gender_list (COUNT(?sex_gender_list) AS ?count) {
+                    SELECT ?sex_gender_list (COUNT(?sex_gender_list) AS ?count) { # count how many of each label
+                      # create list of concatenated labels, as e.g. someone can be non-binary as well as transgender
+                      # so we take this as one label
                       SELECT ?cast_memberLabel (GROUP_CONCAT(DISTINCT ?genderLabel; SEPARATOR = ", ") AS ?sex_gender_list) 
                       WHERE {
                         VALUES ?film {wd:%s}
                         ?film wdt:P161 ?cast_member.
-                        ?cast_member wdt:P21 [rdfs:label ?genderLabel].
-                        FILTER((LANG(?genderLabel)) = "en")
-                        SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+                        ?cast_member wdt:P21 [rdfs:label ?genderLabel]. # get sex/gender labels of cast members
+                        FILTER((LANG(?genderLabel)) = "en") # only english sex/gender labels
+                        SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". } # get labels for rest
                       }
-                      GROUP BY ?cast_memberLabel ?count
+                      GROUP BY ?cast_memberLabel ?count # group by needed for group concat
                     }
-                    GROUP BY ?sex_gender_list ?count
+                    GROUP BY ?sex_gender_list ?count # group by needed for count
                     """ % entity_id
 
                     results = get_results_request(query)
@@ -287,19 +288,17 @@ def main():
                 if i_5 == 3:
                     # QUERY 6: show box office takings and cost and calculate their difference if
                     # they are in the same currency:
-
                     query = """
                     SELECT (MAX(?box_office) AS ?box) ?cost ((?box - ?cost) AS ?difference) ?cost_unitLabel
                     WHERE {
                       VALUES ?film{wd:%s}
-                      ?film wdt:P2142 ?box_office;
-                            p:P2142 [psv:P2142 ?box_node];
-                            wdt:P2130 ?cost;
-                            p:P2130 [psv:P2130 ?cost_node].
-                      ?cost_node wikibase:quantityUnit ?cost_unit.
-                      ?box_node wikibase:quantityUnit ?box_unit.
-                      VALUES ?usd{wd:Q4917}
-                      FILTER (?cost_unit = ?box_unit)
+                      ?film wdt:P2142 ?box_office; # box office takings of film
+                            p:P2142 [psv:P2142 ?box_node]; # get node for box office takings
+                            wdt:P2130 ?cost; # cost of film
+                            p:P2130 [psv:P2130 ?cost_node]. # get node of cost
+                      ?cost_node wikibase:quantityUnit ?cost_unit. # get currency of cost
+                      ?box_node wikibase:quantityUnit ?box_unit. # get currency of box office takings
+                      FILTER (?cost_unit = ?box_unit) # only take those with same currency as otherwise not comparable
                       SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
                     }
                     GROUP BY ?box ?cost ?difference ?cost_unitLabel 
@@ -323,18 +322,19 @@ def main():
                     # QUERY 7: list director(s) of this film with all their other films
                     query = """
                     # tilde as a separator to avoid splitting at comma in film title within python
+                    # create list including all films except for current selected one by director
                     SELECT ?directorLabel (GROUP_CONCAT(DISTINCT ?other_filmLabel; SEPARATOR = " ~ ") AS ?film_list) (COUNT(DISTINCT ?other_filmLabel) AS ?count) 
                     WHERE {
                       VALUES ?film {wd:%s}
-                      ?film wdt:P57 ?director.
-                      ?other_film wdt:P57 ?director;
+                      ?film wdt:P57 ?director. # director variable
+                      ?other_film wdt:P57 ?director; # other films need to have the same director
                                   wdt:P31/wdt:P279* wd:Q11424;
-                                  rdfs:label ?other_filmLabel.
-                      FILTER(?other_film != ?film)
-                      FILTER((LANG(?other_filmLabel)) = "en")
+                                  rdfs:label ?other_filmLabel. # get labels of other films
+                      FILTER(?other_film != ?film) # sort out our current film selected by user
+                      FILTER((LANG(?other_filmLabel)) = "en") # get english labels only
                       SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
                     }
-                    GROUP BY ?directorLabel
+                    GROUP BY ?directorLabel # group by director for group concat
                     """ % entity_id
 
                     results = get_results_request(query)
@@ -385,16 +385,16 @@ def main():
                 if i_3 == 1:
                     # QUERY 8: count awards of films, get top 10
                     query = """
-                    SELECT ?film ?filmLabel (COUNT(?award) AS ?count)
+                    SELECT ?film ?filmLabel (COUNT(?award) AS ?count) # count how many awards are returned per film
                     WHERE {
                       ?film wdt:P31/wdt:P279* wd:Q11424;
                             wdt:P136 wd:%s;
-                            wdt:P166 ?award.
+                            wdt:P166 ?award. # awards of a film
                       SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
                     }
                     GROUP BY ?film ?filmLabel
-                    ORDER BY DESC(?count)
-                    LIMIT 10
+                    ORDER BY DESC(?count) # order by most award first
+                    LIMIT 10 # return top 10
                     """ % film_genre_id
 
                     results = get_results_request(query)
@@ -412,14 +412,13 @@ def main():
                     # difficult to plot everything within a map in python / cleaner view on wikidata query service
 
                     # QUERY 9 show filming locations on map:
-                    url_map = f"https://query.wikidata.org/embed.html#%23defaultView%3AMap%7B%22hide%22%3A%20%22%3Fcoords%22%7D%0ASELECT%20distinct%20%3Ffilm%20%3FfilmLabel%20%3Fcoords%20WHERE%20%7B%0A%20%20%3Ffilm%20wdt%3AP31%2Fwdt%3AP279*%20wd%3AQ11424%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP136%20wd%3A{film_genre_id}%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP915%20%5Bwdt%3AP625%20%3Fcoords%5D.%0A%20%20SERVICE%20wikibase%3Alabel%20%7B%20bd%3AserviceParam%20wikibase%3Alanguage%20%22%5BAUTO_LANGUAGE%5D%2Cen%22.%20%7D%0A%7D%0A"
+                    url_map = f"https://query.wikidata.org/embed.html#%23defaultView%3AMap%7B%22hide%22%3A%20%22%3Fcoords%22%7D%20%23%20this%20is%20for%20hiding%20coordinates%20in%20output%20of%20map%0ASELECT%20DISTINCT%20%3Ffilm%20%3FfilmLabel%20%3Fcoords%20%0AWHERE%20%7B%0A%3Ffilm%20wdt%3AP31%2Fwdt%3AP279*%20wd%3AQ11424%3B%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20wdt%3AP136%20wd%3A{film_genre_id}%3B%20%23%20films%20belonging%20to%20specific%20genre%0A%20%20%20%20%20%20%20wdt%3AP915%20%5Bwdt%3AP625%20%3Fcoords%5D.%20%23%20get%20coordinates%20of%20location%0A%20%20SERVICE%20wikibase%3Alabel%20%7B%20bd%3AserviceParam%20wikibase%3Alanguage%20%22%5BAUTO_LANGUAGE%5D%2Cen%22.%20%7D%0A%7D"
                     webbrowser.open(url_map)
 
                 if i_3 == 3:
                     # query directly included in url
-
                     # QUERY 10: cast members who were born in switzerland and the films they have worked on as list
-                    url_map = f"https://query.wikidata.org/embed.html#%23defaultView%3AMap%7B%22hide%22%3A%20%22%3Fcoordinates%22%7D%0ASELECT%20%3Fcast_member%20%3Fcast_memberLabel%20%3Fcoordinates%20%3Ffilm_listLabel%20WHERE%20%7B%0A%20%20%7B%0A%20%20%20%20SELECT%20%3Fcast_member%20%3Fcoordinates%20(GROUP_CONCAT(DISTINCT%20%3FfilmLabel%3B%20SEPARATOR%20%3D%20%22%2C%20%22)%20AS%20%3Ffilm_list)%20WHERE%20%7B%0A%20%20%0A%20%20%20%20%3Ffilm%20wdt%3AP31%2Fwdt%3AP279*%20wd%3AQ11424%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP136%20wd%3A{film_genre_id}%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP161%20%3Fcast_member%3B%0A%20%20%20%20%20%20%20%20%20%20rdfs%3Alabel%20%3FfilmLabel.%0A%20%20%20%20FILTER((LANG(%3FfilmLabel))%20%3D%20%22en%22)%0A%20%20%20%20%3Fcast_member%20wdt%3AP27%20wd%3AQ39%3B%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20wdt%3AP19%20%5Bwdt%3AP625%20%3Fcoordinates%5D.%0A%20%20%20%20%7D%0A%20%20GROUP%20BY%20%3Fcast_member%20%3Fcoordinates%0A%20%20%7D%0A%20SERVICE%20wikibase%3Alabel%20%7B%20bd%3AserviceParam%20wikibase%3Alanguage%20%22%5BAUTO_LANGUAGE%5D%2Cen%22.%20%7D%0A%7D%0A%0A%0A"
+                    url_map = f"https://query.wikidata.org/embed.html#%23defaultView%3AMap%7B%22hide%22%3A%20%22%3Fcoordinates%22%7D%20%23%C2%A0hide%20coordinates%20from%20output%0ASELECT%20%3Fcast_member%20%3Fcast_memberLabel%20%3Fcoordinates%20%3Ffilm_listLabel%20WHERE%20%7B%0A%20%20%7B%0A%20%20%20%20%23%20concatenate%20all%20films%20cast%20member%20was%20part%0A%20%20%20%20SELECT%20%3Fcast_member%20%3Fcoordinates%20(GROUP_CONCAT(DISTINCT%20%3FfilmLabel%3B%20SEPARATOR%20%3D%20%22%2C%20%22)%20AS%20%3Ffilm_list)%20WHERE%20%7B%0A%20%20%0A%20%20%20%20%3Ffilm%20wdt%3AP31%2Fwdt%3AP279*%20wd%3AQ11424%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP136%20wd%3A{film_genre_id}%3B%0A%20%20%20%20%20%20%20%20%20%20wdt%3AP161%20%3Fcast_member%3B%20%23%20cast%20member%0A%20%20%20%20%20%20%20%20%20%20rdfs%3Alabel%20%3FfilmLabel.%20%23%20get%20film%20label%0A%20%20%20%20FILTER((LANG(%3FfilmLabel))%20%3D%20%22en%22)%20%23%20only%20get%20English%20labels%0A%20%20%20%20%3Fcast_member%20wdt%3AP27%20wd%3AQ39%3B%20%23%20cast%20member%20needs%20to%20be%20Swiss%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20wdt%3AP19%20%5Bwdt%3AP625%20%3Fcoordinates%5D.%20%23%20get%20coordinates%20of%20place%20of%20birth%0A%20%20%20%20%7D%0A%20%20GROUP%20BY%20%3Fcast_member%20%3Fcoordinates%20%23%20group%20needed%20for%20concatenation%0A%20%20%7D%0A%20SERVICE%20wikibase%3Alabel%20%7B%20bd%3AserviceParam%20wikibase%3Alanguage%20%22%5BAUTO_LANGUAGE%5D%2Cen%22.%20%7D%0A%7D%0A%0A%0A"
                     webbrowser.open(url_map)
 
                 if i_3 == 4:
@@ -427,21 +426,21 @@ def main():
                     query = """
                     SELECT ?film ?filmLabel (MAX(?box_office) AS ?box) ?cost ((?box - ?cost) AS ?difference) ?cost_unitLabel
                     WHERE {
-                      ?film wdt:P31/wdt:P279* wd:Q11424;
+                      ?film wdt:P31/wdt:P279* wd:Q11424; 
                             wdt:P136 wd:%s;
                             wdt:P2142 ?box_office;
-                            p:P2142 [psv:P2142 ?box_node];
+                            p:P2142 [psv:P2142 ?box_node]; 
                             wdt:P2130 ?cost;
                             p:P2130 [psv:P2130 ?cost_node].
-                      ?cost_node wikibase:quantityUnit ?cost_unit.
-                      ?box_node wikibase:quantityUnit ?box_unit.
-                      VALUES ?usd{wd:Q4917}
+                      ?cost_node wikibase:quantityUnit ?cost_unit. # get currency of cost
+                      ?box_node wikibase:quantityUnit ?box_unit. # get currency of box office takings
+                      VALUES ?usd{wd:Q4917} # define variable for USD
                       FILTER (?cost_unit = ?usd && ?box_unit = ?usd)  # only select the ones with USD for both
                       SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
                     }
                     GROUP BY ?film ?filmLabel ?box ?cost ?difference ?cost_unitLabel 
-                    ORDER BY DESC(?difference)
-                    LIMIT 10
+                    ORDER BY DESC(?difference) # biggest difference first
+                    LIMIT 10 # return 10
                     """ % film_genre_id
 
                     results = get_results_request(query)
