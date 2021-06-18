@@ -372,7 +372,7 @@ def main():
             while restart_all:
 
                 i_3 = input_checker(input(f'\nEnter an integer to select an option for all {genre_str}s:\n'
-                                          f'[1] show top 10 who won most awards\n'
+                                          f'[1] show top 10 which won most awards\n'
                                           f'[2] show filming locations of all on a map '
                                           f'(this option will open your browser)\n'
                                           f'[3] show birthplace of swiss cast members on a map'
